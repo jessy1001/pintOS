@@ -171,7 +171,7 @@ paging_init (uint64_t mem_end) {
    an argv-like array. */
 static char **
 read_command_line (void) {
-	static char *argv[LOADER_ARGS_LEN / 2 + 1];
+	static char *argv[LOADER_ARGS_LEN / 2 + 1]; //커널한테 넘겨줄 때 argv요소 최대개수 65
 	char *p, *end;
 	int argc;
 	int i;

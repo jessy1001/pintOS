@@ -26,6 +26,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+void argument_stack (char** argv, int argc, struct intr_frame *if_);
 
 /* General process initializer for initd and other process. */
 static void
@@ -183,11 +184,8 @@ process_exec (void *f_name) {
 	/* Command Line 전체 Parsing */
 	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; 
 	token = strtok_r (NULL, " ", &save_ptr)){
-		
-		
 		argv[argc] = token;
 		argc++;
-
 	}
    
 	/* We cannot use the intr_frame in the thread structure.
@@ -211,9 +209,7 @@ process_exec (void *f_name) {
 		return -1;
 	}
 
-	argument_stack(&_if, argc, argv);
-
-	// argument_stack(argc, argv, _if.rsp);
+	argument_stack(argv, argc, &_if);
 
 	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
@@ -223,11 +219,40 @@ process_exec (void *f_name) {
 }
 
 
+//(char**)argv -> (*)argv[i] = string
+void argument_stack(char** argv, int argc, struct intr_frame *if_){
+	int i;
+	char* argu_addr[128];
+	//push parsed commands into stack, user stack grows downward
+	for (int i = argc-1; i >= 0; i--){ //다 저장하고 또 argc++ 했어서 argc-1
+		int N = strlen(argv[i]) + 1; //parse할 때 뒤에 \0 붙여줬지만 strlen은 그 앞까지만 받아옴
+		if_->rsp -= N;
+		memcpy(if_->rsp, argv[i], N);
+		argu_addr[i] = (char*)if_->rsp; //argv[i]를 argv[i]저장한 첫글자의 주소 넣어놓기
+	}
+	//word-align
+	while (if_->rsp%8 != 0){
+		if_->rsp--;
+		memset(if_->rsp, 0, sizeof(uint8_t));
+	}
+	//sentinel...? or address of nonexistent argv[argc]??
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	
+	//push address of commands into stack
+	for (int i = argc-1; i >= 0; i--){
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &argu_addr[i], 8); 
+	}
+	//push fake return address
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	//save to intr_frame registers...?
+	if_-> R.rdi = argc;
+	if_-> R.rsi = if_->rsp + 8; //"point" rsi to address of argv (= address of argv[0])
 
-// static void argument_stack(int argc_cnt, char **argv_list, void **stp){
-// 	int i;
-// 	char *argu_addr[128];
-// 	struct intr_frame *if_;
+
+}
 
 	/* 프로그램 이름 및 인자(문자열) push */
 	/* 프로그램 이름 및 인자 주소들 push */
@@ -236,36 +261,6 @@ process_exec (void *f_name) {
 	/* fake address(0) 저장 */
 
 
-// 	for(i = argc_cnt-1; i>-1; i--){
-// 		for(int j=strlen(argv_list[i]+1);j>-1;j--){
-			
-// 			*stp = *stp - 1;
-		
-		
-// 		argu_addr[i] = stp;
-
-// 		}
-// 	}
-
-// 	while ( *(int*)stp % 8 != 0 ){
-// 		stp--;
-// 		*stp = 0; 
-// 	}
-
-// 	for (i=argc_cnt; i>-1 ; i--){
-// 		*stp = *stp - 8;
-// 		if (i == argc_cnt){
-// 			*stp = 0; 
-// 		}
-// 		else{
-// 			*stp = &argu_addr[i];
-// 		}
-// 	}
-
-// 	*stp = *stp -8;
-// 	*stp = 0;
-
-// }
 
 
 // TODO: 유저 스택에 파싱된 토큰을 저장하는 함수 구현
@@ -276,39 +271,39 @@ process_exec (void *f_name) {
  * esp: 스택 포인터를 가리키는 주소
 */
 
-static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list) {
-	int i;
-	char *argu_addr[128];
-	int argc_len;
+// static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list) {
+// 	int i;
+// 	char *argu_addr[128];
+// 	int argc_len;
 
-	for (i = argv_cnt-1; i >= 0; i--){
-		argc_len = strlen(argv_list[i]);
-		if_->rsp = if_->rsp - (argc_len+1); 
-		memcpy(if_->rsp, argv_list[i], (argc_len+1));
-		argu_addr[i] = if_->rsp;
-	}
+// 	for (i = argv_cnt-1; i >= 0; i--){
+// 		argc_len = strlen(argv_list[i]);
+// 		if_->rsp = if_->rsp - (argc_len+1); 
+// 		memcpy(if_->rsp, argv_list[i], (argc_len+1));
+// 		argu_addr[i] = if_->rsp;
+// 	}
 
-	while (if_->rsp%8 != 0){
-		if_->rsp--;
-		memset(if_->rsp, 0, sizeof(uint8_t));
-	}
+// 	while (if_->rsp%8 != 0){
+// 		if_->rsp--;
+// 		memset(if_->rsp, 0, sizeof(uint8_t));
+// 	}
 
-	for (i = argv_cnt; i>=0; i--){
-		if_->rsp = if_->rsp - 8;
-		if (i == argv_cnt){
-			memset(if_->rsp, 0, sizeof(char **));
-		}else{
-			memcpy(if_->rsp, &argu_addr[i] , sizeof(char **));
-		}
-	}
+// 	for (i = argv_cnt; i>=0; i--){
+// 		if_->rsp = if_->rsp - 8;
+// 		if (i == argv_cnt){
+// 			memset(if_->rsp, 0, sizeof(char **));
+// 		}else{
+// 			memcpy(if_->rsp, &argu_addr[i] , sizeof(char **));
+// 		}
+// 	}
 
-	if_->rsp = if_->rsp - 8;
-	memset(if_->rsp, 0, sizeof(void *));
+// 	if_->rsp = if_->rsp - 8;
+// 	memset(if_->rsp, 0, sizeof(void *));
 
-	if_->R.rdi = argv_cnt;
-	if_->R.rsi = if_->rsp + 8;	
+// 	if_->R.rdi = argv_cnt;
+// 	if_->R.rsi = if_->rsp + 8;	
 
-}
+// }
 
 
 /* Waits for thread TID to die and returns its exit status.  If

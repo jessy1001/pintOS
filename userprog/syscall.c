@@ -41,6 +41,12 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+
+	/*retrieve system call number and any system call arguments,
+	carry out appropriate actions */
 	printf ("system call!\n");
 	thread_exit ();
 }
+
+//check_adress
+//get_argument
