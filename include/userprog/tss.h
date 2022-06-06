@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include "threads/thread.h"
 
-struct task_state {
-	uint32_t res1;
-	uint64_t rsp0;
+struct task_state { 
+	uint32_t res1; //syscall_entry.S에서 movq 4(%r12), %rsp하면 아래 rsp0로
+	uint64_t rsp0; //tss_init에서 kernel stack을 가리키게 됨.
 	uint64_t rsp1;
 	uint64_t rsp2;
 	uint64_t res2;

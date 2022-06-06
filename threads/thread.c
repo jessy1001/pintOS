@@ -187,7 +187,7 @@ thread_print_stats (void) {
 
    If thread_start() has been called, then the new thread may be
    scheduled before thread_create() returns.  It could even exit
-   before thread_create() returns.  Contrariwise, the original
+   before thread_create() returns(idle은 priority가 0이니까...?).  Contrariwise, the original
    thread may run for any amount of time before the new thread is
    scheduled.  Use a semaphore or some other form of
    synchronization if you need to ensure ordering.
@@ -212,9 +212,25 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/* Project 2: System Call */
+	struct thread *parent;
+	parent = thread_current();
+	list_push_back(&parent->child_list, &t->child_elem);
+
+	/* ---Project 2: system call--- */
+	t->fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->fd_table == NULL)
+		return TID_ERROR;
+	t->fd_idx = 2; //0은 stdin, 1은 stdout에 이미 할당
+	t->fd_table[0] = 0; //stdin자리에 1배정
+	t->fd_table[1] = 1; //stdout자리에 2배정 (is the 1 and 2 fd's?)
+	
+	t->stdin_count = 1;
+	t->stdout_count = 1;
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
+	t->tf.rip = (uintptr_t) kernel_thread; //이거 언제 실행? function(aux)의 wrapper로 실행.
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
 	t->tf.ds = SEL_KDSEG;
@@ -223,17 +239,18 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+
 	/* Add to run queue. */
 	thread_unblock (t);
-
 	
 	// Thread unblock 후, 현재 실행중인 thread와 우선순위 비교 
 	// running_thread_priority < new_thread_priority
 	// priority = 새로 들어오는 스레드의 priority
 	// thread_get_priority = Running 상태의 스레드의 priority
-	if (priority > thread_get_priority()){
-		thread_yield();
-	}
+	// if (priority > thread_get_priority()){
+	// 	thread_yield();
+	// }
+	test_max_priority();
 	
 
 	return tid;
@@ -491,6 +508,7 @@ idle (void *idle_started_ UNUSED) {
 /* Function used as the basis for a kernel thread. */
 static void
 // 인자 - thread_func *function : kernel이 실행할 함수, void *aux : sync를 위한 semaphore 등
+// ensures that function that was run exits!!
 kernel_thread (thread_func *function, void *aux) {
 	ASSERT (function != NULL);
 
@@ -511,21 +529,29 @@ init_thread (struct thread *t, const char *name, int priority) {
 	memset (t, 0, sizeof *t);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
-	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
+	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *); //thread내 intr_frame 구조체
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 	
-	/* donations */
+	/* project 1 donations */
 	t->origin_priority = priority;
 	list_init(&t->donors);
 	t->wait_on_lock = NULL;
 
-	/* mlfqs */
+	/* project 1 mlfqs */
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
 	if(t != idle_thread) {
 		list_push_back(&all_list, &t->all_elem);
 	}
+
+	/* project 2 */
+	list_init(&t->child_list);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
+	t->running = NULL;
+	// t -> exit_status = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -542,10 +568,12 @@ next_thread_to_run (void) {
 }
 
 /* Use iretq to launch the thread */
+//tf로 들어온 값들을 실제 CPU register에 넣어주기???
+//이때 tf는 userstack일 수도, thread 구조체일수도
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
-			"movq %0, %%rsp\n"
+			"movq %0, %%rsp\n" //stack pointer rsp
 			"movq 0(%%rsp),%%r15\n"
 			"movq 8(%%rsp),%%r14\n"
 			"movq 16(%%rsp),%%r13\n"

@@ -1,5 +1,8 @@
 #include <syscall.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <syscall.h>
+// #include <init.h>
 #include "../syscall-nr.h"
 
 __attribute__((always_inline))
@@ -22,7 +25,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			"mov %5, %%r10\n"
 			"mov %6, %%r8\n"
 			"mov %7, %%r9\n"
-			"syscall\n"
+			"syscall\n" //여기서 syscall_init -> syscall_entry로 감, return값 여기 ret로 출력
 			: "=a" (ret)
 			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
 			: "cc", "memory");

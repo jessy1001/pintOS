@@ -16,7 +16,7 @@ enum intr_level intr_enable (void);
 enum intr_level intr_disable (void);
 
 /* Interrupt stack frame. */
-struct gp_registers {
+struct gp_registers { //general purpose registers
 	uint64_t r15;
 	uint64_t r14;
 	uint64_t r13;
@@ -35,7 +35,7 @@ struct gp_registers {
 } __attribute__((packed));
 
 struct intr_frame {
-	/* Pushed by intr_entry in intr-stubs.S.
+	/* Pushed by intr_entry!!!!! in intr-stubs.S.
 	   These are the interrupted task's saved registers. */
 	struct gp_registers R;
 	uint16_t es;

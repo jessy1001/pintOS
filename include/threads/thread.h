@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +29,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Project 2 system call */
+#define FDT_PAGES 3 //pages to allocate for file descriptor tables (thread_create, process_exit)
+#define FDCOUNT_LIMIT FDT_PAGES *(1<<9) //Limit fdldx
 
 
 /* A kernel thread or user process.
@@ -110,6 +114,7 @@ struct thread {
 	int nice;
 	int recent_cpu;
 
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -122,6 +127,23 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* -----project 2: system call------*/
+	int exit_status;
+	struct file **fd_table; //thread_create()에서 할당: like an array of open files
+	int fd_idx; //fdtable의 다음 들어갈 or read or write할 자리
+	int stdin_count;
+	int stdout_count;
+	struct file *running; //현재 실행중인 파일(exec에 인자로 들어온 file)
+	
+	struct semaphore fork_sema; //parent waits while child is copying data
+	struct intr_frame parent_if;
+	struct semaphore wait_sema; 
+	struct semaphore free_sema;
+	struct list child_list;
+	struct list_elem child_elem;
+
+	//여기 새로 추가한 애들 다 init_thread() 때 초기화해주기!!
 };
 
 /* If false (default), use round-robin scheduler.

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "bitmap.h": "c",
+        "file.h": "c",
+        "*.inc": "c"
+    }
+}

@@ -12,4 +12,5 @@ void process_activate (struct thread *next);
 // static void argument_stack(int argc_cnt, char **argv_list, void **stp)
 // static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list);
 void argument_stack(char** argv, int argc, struct intr_frame *if_);
+tid_t get_child_with_pid(tid_t tid);
 #endif /* userprog/process.h */

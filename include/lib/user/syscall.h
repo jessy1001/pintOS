@@ -52,7 +52,7 @@ int symlink (const char* target, const char* linkpath);
 
 static inline void* get_phys_addr (void *user_addr) {
 	void* pa;
-	asm volatile ("movq %0, %%rax" ::"r"(user_addr));
+	asm volatile ("movq %0, %%rax"::"r"(user_addr));
 	asm volatile ("int $0x42");
 	asm volatile ("\t movq %%rax, %0": "=r" (pa));
 	return pa;

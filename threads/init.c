@@ -74,8 +74,8 @@ main (void) {
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
-	argv = read_command_line ();
-	argv = parse_options (argv);
+	argv = read_command_line (); //-q -f args-single run 'args-single onearg'만 남김
+	argv = parse_options (argv); //-q, -f, run 있는지 확인하고 set flags )
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
@@ -83,7 +83,7 @@ main (void) {
 	console_init ();
 
 	/* Initialize memory system. */
-	mem_end = palloc_init ();
+	mem_end = palloc_init (); //initializes the page allocator and and gets the memory size
 	malloc_init ();
 	paging_init (mem_end);
 
@@ -147,7 +147,8 @@ static void
 paging_init (uint64_t mem_end) {
 	uint64_t *pml4, *pte;
 	int perm;
-	pml4 = base_pml4 = palloc_get_page (PAL_ASSERT | PAL_ZERO);
+	pml4 = base_pml4 = palloc_get_page (PAL_ASSERT | PAL_ZERO); 
+	//obtains a single free page and returns its kernel VA
 
 	extern char start, _end_kernel_text;
 	// Maps physical address [0 ~ mem_end] to
@@ -171,13 +172,13 @@ paging_init (uint64_t mem_end) {
    an argv-like array. */
 static char **
 read_command_line (void) {
-	static char *argv[LOADER_ARGS_LEN / 2 + 1]; //커널한테 넘겨줄 때 argv요소 최대개수 65
+	static char *argv[LOADER_ARGS_LEN / 2 + 1]; //128/2 + 1 = argv요소 최대개수 65
 	char *p, *end;
 	int argc;
 	int i;
 
 	argc = *(uint32_t *) ptov (LOADER_ARG_CNT);
-	p = ptov (LOADER_ARGS);
+	p = ptov (LOADER_ARGS); //get kernel virtual address of physical address
 	end = p + LOADER_ARGS_LEN;
 	for (i = 0; i < argc; i++) {
 		if (p >= end)
@@ -209,7 +210,7 @@ parse_options (char **argv) {
 		char *name = strtok_r (*argv, "=", &save_ptr);
 		char *value = strtok_r (NULL, "", &save_ptr);
 
-		if (!strcmp (name, "-h"))
+		if (!strcmp (name, "-h")) //"-h"랑 같으면
 			usage ();
 		else if (!strcmp (name, "-q"))
 			power_off_when_done = true;
@@ -236,15 +237,17 @@ parse_options (char **argv) {
 
 /* Runs the task specified in ARGV[1]. */
 static void
-run_task (char **argv) {
-	const char *task = argv[1];
+run_task (char **argv) { //run부터 들어있음
+	const char *task = argv[1]; //task = 'args-single onearg', 다른 건 이미있던 parse에서 잘려나감
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
 	if (thread_tests){ // parse_options userprog -threads-tests에서 true로 바뀜
-		run_test (task);
+		run_test(task); //즉 userprog일 때는 여기로 안 들어옴
 	} else {
-		process_wait (process_create_initd (task)); // task에 들어오는 것? argv[1] ? argv 전체?
+		process_wait (process_create_initd (task)); // 유저 프로세스 생성 후 핀토스는 프로세스 종료 대기
+													// 안에 sema_down(&child->wait_sema) 로 parent waits 
+													//until child signals(sema_up) after its execution
 	}
 #else
 	run_test (task);
@@ -265,7 +268,7 @@ run_actions (char **argv) {	// command line에 썼던 내용을 동작시키는 
 
 	/* Table of supported actions. */
 	static const struct action actions[] = {
-		{"run", 2, run_task},
+		{"run", 2, run_task}, //run_task에서 process_create_initd() 드뎌 나옴
 #ifdef FILESYS
 		{"ls", 1, fsutil_ls},
 		{"cat", 2, fsutil_cat},
@@ -283,9 +286,9 @@ run_actions (char **argv) {	// command line에 썼던 내용을 동작시키는 
 
 		/* Find action name. */
 		for (a = actions; ; a++)
-			if (a->name == NULL)
+			if (a->name == NULL) //a->name 겹치는 걸 못 찾고 NULL을 마주했다면
 				PANIC ("unknown action `%s' (use -h for help)", *argv);
-			else if (!strcmp (*argv, a->name))
+			else if (!strcmp (*argv, a->name)) //a->name인 "run"이 나오면 break
 				break;
 
 		/* Check for required arguments. */
@@ -294,8 +297,8 @@ run_actions (char **argv) {	// command line에 썼던 내용을 동작시키는 
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
 
 		/* Invoke action and advance. */
-		a->function (argv);
-		argv += a->argc;
+		a->function (argv); //run_task(argv)
+		argv += a->argc; //argv == NULL 돼서 나가도록.
 	}
 
 }
